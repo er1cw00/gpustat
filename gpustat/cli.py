@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import signal
 from contextlib import suppress
 
 from blessed import Terminal
@@ -81,19 +82,29 @@ def print_gpustat(*, id=None, json=False, debug=False, **kwargs):
     else:
         gpu_stats.print_formatted(sys.stdout, **kwargs)
 
+    max_temperature = 65
+    if gpu_stats.gpus[0].temperature > max_temperature:
+        for process_info in gpu_stats.gpus[0].processes:
+            pid = process_info['pid']
+            command = process_info['command']
+            print(f'temp: {gpu_stats.gpus[0].temperature} > {max_temperature} °C, kill process:{command}/{pid}')
+            os.kill(pid, signal.SIGKILL)
+
 
 def loop_gpustat(interval=1.0, **kwargs):
     term = Terminal()
-
+    show_header = True
     with term.fullscreen():
         while 1:
             try:
                 query_start = time.time()
-
                 # Move cursor to (0, 0) but do not restore original cursor loc
-                print(term.move(0, 0), end='')
+                
+                #print(term.move(0, 0), end='')
+                kwargs['show_header'] = show_header
                 print_gpustat(eol_char=term.clear_eol + os.linesep, **kwargs)
                 print(term.clear_eos, end='')
+                show_header = False
 
                 query_duration = time.time() - query_start
                 sleep_duration = interval - query_duration
